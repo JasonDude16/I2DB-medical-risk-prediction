@@ -18,7 +18,7 @@ editor_options:
 #| message: false
 
 library(tidyverse)
-df_train <- readRDS("../../data/processed/Training_Set_processed.RDS")
+df_train <- readRDS("../../data/raw/Training_Set.RDS")
 ```
 
 ## Goal
@@ -136,6 +136,45 @@ plot_category_vars("Echo|Ejection.Fraction|Total.LOS.Admitted")
 model_category("Echo|Ejection.Fraction|Total.LOS.Admitted")
 ```
 
-### 
+## Variables with potential
+
+For variables that seem to have some predictive value (based on plotting and modeling above), let's try binning the continuous variables and see how the proportion of those with 1-year mortality changes across bins.
+
+```{r}
+# helper function
+plot_binned <- function(x, y = "X1Yr_Death", df = df_train, brks = 15) {
+   p <- df %>% 
+     filter(!is.na(.data[[x]])) %>% 
+     mutate(x_binned = cut(.data[[x]], breaks = brks)) %>% 
+     group_by(x_binned) %>% 
+     summarise(
+       count = n(),
+       prop_positive = mean(.data[[y]] == "True", na.rm = T)
+     ) %>% 
+     ggplot(aes(x_binned, prop_positive)) +
+     geom_bar(stat = "identity") + 
+     geom_text(aes(label = count), vjust=-1) +
+     xlab(x) +
+     ylab("Proportion with event of interest") +
+     theme(text = element_text(size = 16))
+  plot(p)
+}
+```
+
+```{r}
+# select "interesting" variables for plotting
+df_train %>% 
+  select(
+    Max.Albumin.Result,
+    Last.Hemoglobin.Days.From.Admit,
+    Last.Hemoglobin.Result,
+    Max.Weight.Days.From.Admit,
+    Age.at.Last.Echo,
+    Last.Ejection.Fraction,
+    Total.LOS.Admitted.in.Last.Year
+  ) %>% 
+  colnames() %>% 
+  walk(plot_binned, df = df_train)
+```
 
 ### 
