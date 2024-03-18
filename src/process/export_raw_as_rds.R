@@ -23,4 +23,4 @@ df <- as_tibble(df)
 str(df)
 
 # importantly, we export as RDS so we can maintain data types during subsequent imports
-saveRDS(df, "./data/processed/Training_Set_processed.RDS")
+saveRDS(df, "./data/raw/Training_Set.RDS")
