@@ -1,0 +1,55 @@
+---
+title: "Initial Data Exploration"
+author: "Jason Dude"
+format: 
+  html:
+    self-contained: true
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Setup
+
+```{r}
+#| warning: false
+#| message: false
+
+library(tidyverse)
+df_train <- read.csv("../../data/raw/Training_Set.csv")
+```
+
+## The Basics
+
+Let's start with the `skim` function from the `skimr` package, which provides a great overview with just one function call.
+
+```{r}
+skimr::skim(df_train)
+```
+
+We can gain a lot of insight from this one function:
+
+1.  Close to 6000 rows and 100 variables
+2.  Most variables are numeric
+3.  No missing values on the outcome variable, `X1Yr_Death`, so that's good
+4.  Character variables can easily be converted to factors, as all of them have 4 or less unique values
+5.  A lot of missing values for numeric variables, especially cardiac blood biomarkers (e.g., troponin)
+6.  Many of the distributions are skewed---not surprising since many values will have a minimum of 0
+7.  Variables have very different ranges, so normalization will be a good idea
+8.  We have multiple variables for one data "category", such as respiratory, potassium, creatinine, etc. 
+
+#### Class balance
+
+Classes are imbalanced, with \~75% not having event of interest.
+
+```{r}
+prop.table(table(df_train$X1Yr_Death))
+```
+
+#### All unique patients?
+
+All IDs are unique, so we assume every row is a new, independent observation.
+
+```{r}
+sum(duplicated(df_train$Patient_ID))
+```

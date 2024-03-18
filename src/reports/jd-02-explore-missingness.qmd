@@ -1,0 +1,141 @@
+---
+title: "Explore Variables with High Missingness"
+author: "Jason Dude"
+format: 
+  html:
+    fig-height: 8
+    fig-width: 10
+    self-contained: true
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Setup
+
+```{r}
+#| warning: false
+#| message: false
+
+library(tidyverse)
+df_train <- readRDS("../../data/processed/Training_Set_processed.RDS")
+```
+
+## Goal
+
+It would be nice to generate a quick baseline model for these data. However, some predictors have high missingness (\>90%), so it would be good to understand how informative these predictors are. If they are highly predictive, we could for example convert missing values to a dedicated factor level. But if they aren't predictive, it's probably easiest to simply remove these variables.
+
+```{r}
+df_train %>% 
+  is.na() %>% 
+  colSums() %>% 
+  data.frame(var = .) %>% 
+  filter(var > 500) %>% 
+  arrange(desc(var))
+```
+
+Let's create helper functions for plotting and modeling these "categories".
+
+```{r}
+# plotting vars of the same category
+plot_category_vars <- function(cat, df = df_train, y = "X1Yr_Death") {
+
+  # remove NAs 
+  res <- df %>% 
+    select(y, matches(cat)) %>% 
+    drop_na()
+  
+  # log, center and scale
+  # adding .01 bc some values are 0, and log(0) is -Inf
+  res <- res %>% 
+    select(-.data[[y]]) %>% 
+    mutate(across(matches(cat), .fns = ~ log(.x + .01))) %>% 
+    scale() %>% 
+    as.data.frame() %>% 
+    cbind(y = res[[y]])
+  
+  # convert to long and plot
+  p <- res %>% 
+    pivot_longer(colnames(select(., -y))) %>% 
+    ggplot(aes(value, name, col = y)) +
+    geom_jitter(height = 0.3, width = 0) + 
+    ylab("") +
+    xlab("") + 
+    theme(text = element_text(size = 16))
+  plot(p)
+  
+  # let's also plot bivariates bc why not
+  plot(res[setdiff(colnames(res), "y")], col = res$y)
+}
+
+# modeling category
+# note that we log-transform like we did for plotting
+model_category <- function(cat, df = df_train, y = "X1Yr_Death") {
+  f <- as.formula(paste(y, "~ ."))
+  res <- df %>% 
+    select(y, matches(cat)) %>% 
+    drop_na() %>% 
+    mutate(across(matches(cat), .fns = ~ log(.x + .01)))
+  glm(f, data = res, family = "binomial") %>% summary() 
+}
+```
+
+## Plot & Model
+
+### Troponin
+
+```{r}
+#| warning: false
+
+plot_category_vars("Troponin")
+model_category("Troponin")
+```
+
+### BNP
+
+```{r}
+#| warning: false
+
+plot_category_vars("Bnp")
+model_category("BNP")
+```
+
+### Albumin
+
+```{r}
+#| warning: false
+
+plot_category_vars("Albumin")
+model_category("Albumin")
+```
+
+### Hemoglobin
+
+```{r}
+#| warning: false
+
+plot_category_vars("Hemoglobin")
+model_category("Hemoglobin")
+```
+
+### Weight
+
+```{r}
+#| warning: false
+
+plot_category_vars("Weight")
+model_category("Weight")
+```
+
+### Predictors not captured in categories
+
+```{r}
+#| warning: false
+
+plot_category_vars("Echo|Ejection.Fraction|Total.LOS.Admitted")
+model_category("Echo|Ejection.Fraction|Total.LOS.Admitted")
+```
+
+### 
+
+### 
