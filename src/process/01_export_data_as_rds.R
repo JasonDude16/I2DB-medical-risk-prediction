@@ -33,11 +33,11 @@ df_test <- process_data(df_test)
 # now we'll create a validation set for testing our models 
 set.seed(1)
 in_train <- sample(1:nrow(df_train), round(nrow(df_train) * .85))
-df_train <- df_train[in_train, ]
-df_validation <- df_train[-in_train, ]
+df_train_sub <- df_train[in_train, ]
+df_valid <- df_train[-in_train, ]
 
 # let's ensure outcome is similar between splits
-purrr::map(list(df_train, df_validation), function(df) {
+purrr::map(list(df_train_sub, df_valid), function(df) {
   df %>% 
     group_by(X1Yr_Death) %>% 
     summarise(count = n()) %>% 
@@ -47,5 +47,5 @@ purrr::map(list(df_train, df_validation), function(df) {
 
 # importantly, we export as RDS so we can maintain data types during subsequent imports
 saveRDS(df_train, "./data/raw/Training_Set.RDS")
-saveRDS(df_validation, "./data/raw/Validation_Set.RDS")
+saveRDS(df_valid, "./data/raw/Validation_Set.RDS")
 saveRDS(df_test, "./data/raw/Test_Sest.RDS")
