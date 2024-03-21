@@ -12,11 +12,15 @@ df_train <- df_train %>% mutate(X1Yr_Death = as.factor(X1Yr_Death))
 # 2) replace empty race fields with "unknown"
 # 3) convert characters to factor 
 # 4) convert to tibble bc we like tibbles
+# update (3/21): removing several sodium variables bc they are
+# collinear which made the MICE algorithm complain during imputation 
 process_data <- function(df){
   df <- df %>% 
     select(
       -Primary.Insurance,
-      -Admission.Year
+      -Admission.Year,
+      -First.Sodium.Result,
+      -First.Sodium.Days.From.Admit,
     ) %>% 
     mutate(
       Race.Simplified = ifelse(Race.Simplified == "", "Unknown", Race.Simplified),
@@ -49,3 +53,6 @@ purrr::map(list(df_train_sub, df_valid), function(df) {
 saveRDS(df_train, "./data/raw/Training_Set.RDS")
 saveRDS(df_valid, "./data/raw/Validation_Set.RDS")
 saveRDS(df_test, "./data/raw/Test_Sest.RDS")
+
+# clear workspace so we can run scripts in succession
+rm(list = ls())
