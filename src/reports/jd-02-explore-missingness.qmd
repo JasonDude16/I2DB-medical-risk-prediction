@@ -30,7 +30,7 @@ df_train %>%
   is.na() %>% 
   colSums() %>% 
   data.frame(var = .) %>% 
-  filter(var > 500) %>% 
+  filter(var > 500) %>%
   arrange(desc(var))
 ```
 
@@ -156,7 +156,10 @@ plot_binned <- function(x, y = "X1Yr_Death", df = df_train, brks = 15) {
      geom_text(aes(label = count), vjust=-1) +
      xlab(x) +
      ylab("Proportion with event of interest") +
-     theme(text = element_text(size = 16))
+     theme(
+       text = element_text(size = 16),
+       axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)
+      )
   plot(p)
 }
 ```
@@ -165,9 +168,13 @@ plot_binned <- function(x, y = "X1Yr_Death", df = df_train, brks = 15) {
 # select "interesting" variables for plotting
 df_train %>% 
   select(
+    First.Bnp.Days.From.Admit,
+    Last.Albumin.Result,
     Max.Albumin.Result,
     Last.Hemoglobin.Days.From.Admit,
     Last.Hemoglobin.Result,
+    Last.Weight.Days.From.Admit,
+    Min.Weight.Days.From.Admit,
     Max.Weight.Days.From.Admit,
     Age.at.Last.Echo,
     Last.Ejection.Fraction,
@@ -176,5 +183,3 @@ df_train %>%
   colnames() %>% 
   walk(plot_binned, df = df_train)
 ```
-
-### 
