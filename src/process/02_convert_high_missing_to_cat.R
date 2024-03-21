@@ -44,3 +44,6 @@ df_test <- process_data(df_test, terts)
 saveRDS(df_train, "./data/processed/Training_Set.RDS")
 saveRDS(df_valid, "./data/processed/Validation_Set.RDS")
 saveRDS(df_test, "./data/processed/Test_Sest.RDS")
+
+# clear workspace so we can run scripts in succession
+rm(list = ls())
