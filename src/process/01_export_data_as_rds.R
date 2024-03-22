@@ -21,6 +21,7 @@ process_data <- function(df){
       -Admission.Year,
       -First.Sodium.Result,
       -First.Sodium.Days.From.Admit,
+      -Last.Sodium.Days.From.Admit
     ) %>% 
     mutate(
       Race.Simplified = ifelse(Race.Simplified == "", "Unknown", Race.Simplified),
