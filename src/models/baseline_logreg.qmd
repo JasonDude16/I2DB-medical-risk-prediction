@@ -112,6 +112,7 @@ wf_preds %>%
 wf_preds %>% 
   ggplot(aes(.pred_True, fill = X1Yr_Death)) +
   geom_histogram(bins = 50, col = "black") +
+  geom_vline(xintercept = 0.5, lty = 2, linewidth = 1.5) +
   xlab("Probability of True (mortality)") +
   ylab("Count") +
   ggtitle("Distribution of predictions")
