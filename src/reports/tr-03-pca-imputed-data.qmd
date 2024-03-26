@@ -1,0 +1,93 @@
+---
+title: "PCA of imputed dataset"
+author: "Tanner Reece"
+format: 
+  html:
+    self-contained: true
+    fig-width: 10
+    fig-height: 8
+execute: 
+  warning: false
+  message: false
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Setup
+
+```{r}
+library(dplyr)
+library(psych)
+library(ggplot2)
+```
+
+```{r}
+# imputed train set
+df_train <- readr::read_rds("../../data/processed/train_set_imputed.RDS")
+
+# labels 
+labels <- df_train$X1Yr_Death
+
+# select continuous variables
+df_train_numeric <- df_train %>% 
+  select(-Patient_ID, -X1Yr_Death) %>% 
+  dplyr::select_if(is.numeric)
+```
+
+## Analysis
+
+Determine how many meaningful PCs there are. I.e. how many PCs capture more variance than that due to random chance
+
+```{r}
+fa.parallel(df_train_numeric, fa = "pc")
+```
+
+```{r}
+KMO(df_train_numeric)
+```
+
+Overall MSA is 0.84, which suggests data are highly suitable for PCA
+
+```{r}
+# extracting 12 components, no rotation
+train_pca <- prcomp(
+  df_train_numeric,
+  rank = 12,
+  center = TRUE,
+  scale. = TRUE,
+  retx = FALSE
+)
+```
+
+12 components captures 74.1% of variance
+
+```{r}
+summary(train_pca)
+factoextra::fviz_screeplot(train_pca, ncp = 12, addlabels = TRUE)
+```
+
+Plotting relationships between PCs and coloring by training label
+
+```{r}
+train_pca %>% 
+  predict(df_train_numeric) %>% 
+  as.data.frame() %>% 
+  GGally::ggpairs(aes(color = labels))
+```
+
+Determining which variables load highest on each PC
+
+```{r}
+loadings <- train_pca$rotation %>% 
+  as.data.frame() %>% 
+  tibble::rownames_to_column(var = "varname") 
+
+purrr::map(names(loadings[,-1]), function(x) {
+  loadings %>% 
+    dplyr::select(varname, x) %>% 
+    mutate("{x}" := abs(.data[[x]])) %>% 
+    arrange(desc(.data[[x]])) %>% 
+    slice(1:5)
+})
+```
