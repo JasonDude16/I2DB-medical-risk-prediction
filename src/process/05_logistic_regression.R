@@ -30,6 +30,23 @@ data <- readRDS("train_set_imputed.rds") %>%
                 Max.Sodium.Days.From.Admit,X1Yr_Death) %>% 
   mutate(X1Yr_Death = as.logical(X1Yr_Death))
 
+### EDA Plots
+data %>% dplyr::select(-Patient_ID) %>% 
+  ggpairs(aes(color = X1Yr_Death),
+          lower = list(continuous = wrap("points", alpha = 0.5)))
+
+#Possibly log these variables
+#Min.Weight.Result, Number.of.Outpatient.Visits.Last.Year,
+#First.Creatinine.Result, Last.Weight.Result, Max.Sodium.Days.From. Admit
+log_vars <- c("Min.Weight.Result", "Number.of.Outpatient.Visits.Last.Year",
+  "First.Creatinine.Result", "Last.Weight.Result", "Max.Sodium.Days.From.Admit")
+
+data_log <- data %>% mutate_at(log_vars, ~log(.x))
+
+data_log %>% dplyr::select(-Patient_ID) %>% 
+  ggpairs(aes(color = X1Yr_Death),
+          lower = list(continuous = wrap("points", alpha = 0.5)))
+
 
 valid <- data %>% slice_sample(prop = 0.3) %>% dplyr::select(-Patient_ID)
 
@@ -89,9 +106,10 @@ options <- furrr_options(seed=123)
       
       # Train logistic regression models
       model_first_order <- glm(formula = X1Yr_Death ~ ., family = binomial("logit"),
-                   data = train_data)
+                   data = train_data, na.action = "na.omit")
       
-      model_second_order <- glm(X1Yr_Death ~ .^2, family = binomial("logit"), data = train_data)
+      model_second_order <- glm(X1Yr_Death ~ .^2, family = binomial("logit"), 
+                                data = train_data, na.action = "na.omit")
       
       
       # Predict on the left-out observation
@@ -161,11 +179,5 @@ auc_2
 
 roc_2 <- roc(valid$X1Yr_Death, second_order_predictions)
 plot(roc_2)
-
-### EDA Plots
-data %>% dplyr::select(-Patient_ID) %>% 
-  ggpairs(aes(color = X1Yr_Death))
-
-
 
 
