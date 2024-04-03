@@ -58,7 +58,7 @@ df_imp <- mice_imp_obj %>%
 df_all <- bind_cols(df_exclude, df_imp)
 
 # now re-split data into their respective sets and save
-for (type_ in c("train", "validation", "test")) {
+for (type_ in c("train", "valid", "test")) {
   
   out <- file.path("./data/processed", paste0(type_, "_set_imputed.RDS"))
   res <- df_all %>% filter(type == type_) %>% dplyr::select(-type)
