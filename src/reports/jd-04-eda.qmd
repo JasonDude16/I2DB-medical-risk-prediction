@@ -1,0 +1,52 @@
+---
+title: "Exploratory data analysis"
+author: "Jason Dude"
+format: 
+  html:
+    self-contained: true
+    fig-height: 8
+    fig-width: 10
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| warning: false
+#| message: false
+library(tidyverse)
+library(rmarkdown)
+
+# ggplot themeing
+theme_set(theme(text = element_text(size = 16)))
+
+# read imputed training set
+df_train <- readRDS("../../data/processed/train_set_imputed.RDS")
+```
+
+```{r}
+plot_and_model <- function(var1, var2, df = df_train) {
+  p <- df %>%
+    ggplot(aes(.data[[var1]], .data[[var2]], col = X1Yr_Death)) +
+    geom_jitter(alpha = .5)
+  plot(p)
+  
+  fm <- as.formula(paste0("X1Yr_Death ~ ", var1, " * ", var2))
+  df %>% 
+    mutate(X1Yr_Death = ifelse(X1Yr_Death == "False", 0, 1)) %>% 
+    glm(fm, data = .) %>% 
+    summary() %>% 
+    print()
+}
+
+tmp <- c(
+  "Number.of.Outpatient.Visits.Last.Year",
+  "Age.At.Admission",
+  "Min.Weight.Result",
+  "First.Creatinine.Result"
+)
+
+x <- combn(tmp, 2)
+
+walk2(x[1,], x[2,], plot_and_model)
+```

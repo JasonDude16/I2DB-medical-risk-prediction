@@ -1,0 +1,136 @@
+---
+title: "Baseline- Logistic Regression w/ top predictors"
+author: "Jason Dude"
+format: 
+  html:
+    self-contained: true
+    fig-height: 8
+    fig-width: 10
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Setup
+
+```{r}
+#| warning: false
+#| message: false
+
+library(themis)
+library(tidymodels)
+library(tidyverse)
+library(rmarkdown)
+
+# ggplot themeing
+theme_set(theme(text = element_text(size = 16)))
+
+# read imputed training set
+df_train <- readRDS("../../data/processed/train_set_imputed.RDS")
+
+# specify file name of model
+file_name <- "logreg-toppredictors-interact-10foldcv"
+```
+
+## Modeling with tidymodels
+
+```{r}
+# check if we've already created this model; if so read it in
+out <- file.path("../../models", paste0(file_name, ".RDS"))
+
+if (file.exists(out)) {
+  wf_res <- readRDS(out)
+  
+} else {
+ # recipe of formula specification and preprocessing steps
+  rec <- df_train %>% 
+    recipe(X1Yr_Death ~ ., data = .) %>% 
+    step_select(
+      X1Yr_Death, 
+      Min.Weight.Result,
+      Number.of.Outpatient.Visits.Last.Year,
+      First.Creatinine.Result,
+      Max.Weight.Result,
+      Age.At.Admission,
+      Last.Hemoglobin.Result,
+      Max.Sodium.Days.From.Admit,
+      Min.Creatinine.Days.From.Admit
+    ) %>%
+    step_mutate_at(
+      c(
+        Number.of.Outpatient.Visits.Last.Year,
+        First.Creatinine.Result,
+        Max.Sodium.Days.From.Admit,
+        Min.Creatinine.Days.From.Admit
+      ), fn = ~ .x + 1
+    ) %>% 
+    step_log(
+      Number.of.Outpatient.Visits.Last.Year,
+      First.Creatinine.Result,
+      Max.Sodium.Days.From.Admit,
+      Min.Creatinine.Days.From.Admit
+    ) %>% 
+    step_center(all_numeric_predictors()) %>% 
+    step_scale(all_numeric_predictors()) %>% 
+    step_interact(~ all_numeric_predictors()^2) %>% 
+    update_role(Patient_ID, new_role = "ID")
+  
+  # specify model and backend
+  mod <- logistic_reg(
+    mode = "classification",
+    engine = "glm"
+  )
+  
+  # combine recipe and model by using a workflow
+  wf <- workflow() %>% 
+    add_recipe(rec) %>% 
+    add_model(mod)
+  
+  # use 10-fold CV to fit model to data
+  folds <- vfold_cv(df_train, v = 10)
+  cntrl_opts <- control_resamples(save_pred = TRUE, save_workflow = TRUE)
+  
+  # fit model
+  wf_res <- fit_resamples(wf, resamples = folds, control = cntrl_opts)
+  
+  # save
+  saveRDS(wf_res, file.path("../../models", paste0(file_name, ".RDS"))) 
+  saveRDS(wf, file.path("../../workflows", paste0(file_name, ".RDS")))
+}
+```
+
+## Results
+
+```{r}
+# collect preds across folds
+wf_preds <- wf_res %>% collect_predictions()
+
+# accuracy and AUC
+collect_metrics(wf_res)
+
+# best fit metrics
+print(
+  rbind(
+    f_meas(wf_preds, X1Yr_Death, .pred_class, event_level = "second"),
+    mcc(wf_preds, X1Yr_Death, .pred_class)
+  )
+)
+
+# roc curve
+wf_preds %>% 
+  roc_curve(X1Yr_Death, .pred_False) %>%
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_path() +
+  geom_abline(lty = 3) +
+  coord_equal() +
+  theme_bw()
+
+# predicted probabilities
+wf_preds %>% 
+  ggplot(aes(.pred_True, fill = X1Yr_Death)) +
+  geom_histogram(bins = 50, col = "black") +
+  geom_vline(xintercept = 0.5, lty = 2, linewidth = 1.5) +
+  xlab("Probability of True (mortality)") +
+  ylab("Count") +
+  ggtitle("Distribution of predictions")
+```

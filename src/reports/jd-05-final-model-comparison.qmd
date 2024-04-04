@@ -1,0 +1,128 @@
+---
+title: "Model Comparison"
+author: "Jason Dude"
+format: 
+  html:
+    self-contained: true
+    fig-height: 4
+    fig-width: 10
+execute: 
+  warning: false
+  message: false
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidymodels)
+library(tidyverse)
+```
+
+```{r}
+df_train <- readRDS("../../data/processed/train_set_imputed.RDS")
+df_valid <- readRDS("../../data/processed/valid_set_imputed.RDS")
+```
+
+```{r}
+wf_lr_full <- readRDS("../../workflows/baseline-logreg-10foldcv.RDS")
+```
+
+```{r}
+create_workflow <- function(df, is_test) {
+  
+  vars <- c(
+    "X1Yr_Death", 
+    "Min.Weight.Result",
+    "Number.of.Outpatient.Visits.Last.Year",
+    "First.Creatinine.Result",
+    "Max.Weight.Result",
+    "Age.At.Admission",
+    "Last.Hemoglobin.Result",
+    "Max.Sodium.Days.From.Admit",
+    "Min.Creatinine.Days.From.Admit"
+  ) 
+
+  if (is_test) {
+    vars <- setdiff(vars, "X1Yr_Death")
+  }
+  
+  rec <- df %>% 
+    recipe(X1Yr_Death ~ ., data = .) %>% 
+    step_select(all_of(vars)) %>%
+    step_mutate_at(
+      c(
+        Number.of.Outpatient.Visits.Last.Year,
+        First.Creatinine.Result,
+        Max.Sodium.Days.From.Admit,
+        Min.Creatinine.Days.From.Admit
+      ), fn = ~ .x + 1
+    ) %>% 
+    step_log(
+      Number.of.Outpatient.Visits.Last.Year,
+      First.Creatinine.Result,
+      Max.Sodium.Days.From.Admit,
+      Min.Creatinine.Days.From.Admit
+    ) %>% 
+    step_center(all_numeric_predictors()) %>% 
+    step_scale(all_numeric_predictors()) %>% 
+    step_interact(~ all_numeric_predictors()^2) %>% 
+    update_role(Patient_ID, new_role = "ID")
+  
+    # specify model and backend
+  mod <- logistic_reg(
+    mode = "classification",
+    engine = "glm"
+  )
+  
+  # combine recipe and model by using a workflow
+  wf <- workflow() %>% 
+    add_recipe(rec) %>% 
+    add_model(mod)
+  
+  return(wf)
+}
+
+wf_lr_top <- create_workflow(df_train, is_test = F)
+```
+
+```{r}
+fit_and_predict <- function(train, valid, wf, label) {
+  wf_fit <- wf %>% fit(train) %>% extract_fit_parsnip()
+  wf_rec <- wf %>% fit(train) %>% extract_recipe()
+  preds <- predict(wf_fit, type = "prob", new_data = bake(wf_rec, new_data = valid))
+  df <- cbind(preds, label = valid[[label]])
+  return(df)
+}
+```
+
+```{r}
+df_preds_lr_full <- fit_and_predict(df_train, df_valid, wf_lr_full, "X1Yr_Death")
+df_preds_lr_top <- fit_and_predict(df_train, df_valid, wf_lr_top, "X1Yr_Death")
+```
+
+```{r}
+assess_model <- function(mod, plot_title) {
+  print(roc_auc(mod, label, .pred_False))
+  
+  p1 <- mod %>% 
+    roc_curve(label, .pred_False) %>%
+    ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+    geom_path() +
+    geom_abline(lty = 3) +
+    coord_equal() +
+    ggtitle(plot_title) +
+    theme_bw()
+  
+  p2 <- mod %>% 
+    ggplot(aes(.pred_True, fill = label)) +
+    geom_histogram(show.legend = F) +
+    geom_vline(xintercept = 0.5, lty = 2, size = 1.2) +
+    theme_classic()
+    
+  gridExtra::grid.arrange(p1, p2, nrow = 1)
+}
+
+assess_model(df_preds_lr_full, "Logistic regression- Full Model")
+assess_model(df_preds_lr_top, "Logistic regression- Top 8 features")
+```

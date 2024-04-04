@@ -1,0 +1,179 @@
+---
+title: "Baseline- Boosted tree"
+date: today
+author: "Jason Dude"
+format: 
+  html:
+    self-contained: true
+    fig-height: 8
+    fig-width: 10
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Setup
+
+```{r}
+#| warning: false
+#| message: false
+
+library(themis)
+library(tidymodels)
+library(tidyverse)
+library(rmarkdown)
+tidymodels_prefer()
+
+# ggplot themeing
+theme_set(theme(text = element_text(size = 16)))
+
+# read imputed training set
+df_train <- readRDS("../../data/processed/train_set_imputed.RDS")
+```
+
+```{r}
+# SCRIPT PARAMETERS
+use_multiple_cores <- TRUE
+overwrite <- FALSE
+
+# name of model saved to ./models
+file_name <- "baseline-boostedtree-10foldcv-tunegrid"
+```
+
+## Create tidymodels workflow
+
+```{r}
+# recipe of formula specification and preprocessing steps
+mod_recipe <- df_train %>% 
+  recipe(X1Yr_Death ~ ., data = .) %>% 
+  update_role(Patient_ID, new_role = "ID") %>% 
+  step_select(X1Yr_Death, all_numeric_predictors()) %>% 
+  step_center(all_numeric_predictors()) %>% 
+  step_scale(all_numeric_predictors())
+```
+
+```{r}
+# specify model and backend
+mod <- boost_tree(
+  mode = "classification",
+  trees = 200,
+  min_n = 2,
+  learn_rate = 1e-7, 
+  mtry = 20,
+  loss_reduction = tune()
+)
+
+# create hyperparameter tuning grid; default is a semi-random grid
+hyp_grid <- grid_regular(loss_reduction(), levels = 10)
+
+# create workflow object
+wf <- workflow() %>% add_recipe(mod_recipe) %>% add_model(mod)
+```
+
+```{r}
+# resampling procedure
+set.seed(123)
+folds <- vfold_cv(df_train, v = 10)
+cntrl_opts <- control_resamples(save_pred = TRUE, save_workflow = TRUE) 
+```
+
+## Run model and save
+
+```{r}
+#| message: false
+
+# get/create path to file
+out_path <- paste0("../../models/", file_name, ".rds")
+
+# first check if model already exists, in which case we load it
+if (file.exists(out_path) && !overwrite) {
+  wf_res <- readRDS(out_path)
+  
+} else {
+  
+  # start time
+  t1 <- lubridate::now()
+  
+  if (use_multiple_cores) {
+    doMC::registerDoMC(cores = 4) 
+  }
+  
+  # create workflow and fit model
+    wf_res <- wf %>% 
+      tune_grid(
+        resamples = folds,
+        grid = hyp_grid,
+        control = cntrl_opts
+      )
+  
+  # create dir(s)
+  if (!dir.exists(dirname(out_path))) {
+    dir.create(dirname(out_path), recursive = TRUE)
+  }
+  
+  # only save if the model didn't fail
+  if (!any(collect_notes(wf_res)$type == "error")) {
+    saveRDS(wf_res, out_path) 
+    
+  } else {
+    warning("Error occurred when modeling. Check results.") 
+  }
+  
+  # go back to sequential processing
+  if (use_multiple_cores) {
+    foreach::registerDoSEQ() 
+  }
+  
+  # end time
+  t2 <- lubridate::now()
+  
+  # time diff
+  print(round(t2 - t1, 2))
+
+}
+```
+
+## Processing info
+
+```{r}
+print(wf)
+```
+
+## Model summary and diagnostics
+
+```{r}
+# generic plot comparing hyperparameters
+print(autoplot(wf_res))  
+
+# model with best metric
+wf_best_mod <- select_best(wf_res, metric = "roc_auc")
+print(wf_best_mod)
+
+# get predictions from best model
+wf_preds <- wf_res %>% 
+  collect_predictions() %>% 
+  filter(.config == wf_best_mod$.config)
+```
+
+```{r}
+# best fit metrics
+paged_table(collect_metrics(wf_res))
+
+# roc curve
+wf_preds %>% 
+  roc_curve(X1Yr_Death, .pred_False) %>%
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_path() +
+  geom_abline(lty = 3) +
+  coord_equal() +
+  theme_bw()
+
+# predicted probabilities
+wf_preds %>% 
+  ggplot(aes(.pred_True, fill = X1Yr_Death)) +
+  geom_histogram(bins = 50, col = "black") +
+  geom_vline(xintercept = 0.5, lty = 2, linewidth = 1.5) +
+  xlab("Probability of True (mortality)") +
+  ylab("Count") +
+  ggtitle("Distribution of predictions")
+```
