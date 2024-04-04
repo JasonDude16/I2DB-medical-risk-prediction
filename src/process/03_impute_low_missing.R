@@ -12,7 +12,7 @@ df_train$type <- "train"
 df_valid$type <- "valid"
 df_test$type <- "test"
 
-# also need to add NA variable
+# also need to add outcome variable
 df_test$X1Yr_Death <- NA
 
 # combine all
@@ -31,14 +31,26 @@ df_sub <- df_all %>% dplyr::select(-Patient_ID, -X1Yr_Death)
 ignore_rows <- df_all$type %in% c("valid", "test")
 
 # using multiple imputation with predictive mean matching 
-mice_imp_obj <- df_sub %>% 
-  futuremice(
-    m = 50, 
-    parallelseed = 16,
-    n.core = (detectCores()/2) - 2,
-    maxit = 25,
-    ignore = ignore_rows
-)
+if (file.exists("./data/processed/supp/mice_object.rds")) {
+  mice_imp_obj <- readRDS("./data/processed/supp/mice_object.rds")
+  
+} else {
+  mice_imp_obj <- df_sub %>% 
+    futuremice(
+      m = 50, 
+      parallelseed = 16,
+      n.core = (detectCores()/2) - 2,
+      maxit = 25,
+      ignore = ignore_rows
+    )
+  
+  if (!dir.exists("./data/processed/supp")) {
+    dir.create("./data/processed/supp", recursive = TRUE)
+  }
+  
+  saveRDS(mice_imp_obj, "./data/processed/supp/mice_object.rds")
+  
+}
 
 # average imputed datasets
 # note that this would note not be appropriate if we were interested in
@@ -58,7 +70,7 @@ df_imp <- mice_imp_obj %>%
 df_all <- bind_cols(df_exclude, df_imp)
 
 # now re-split data into their respective sets and save
-for (type_ in c("train", "validation", "test")) {
+for (type_ in c("train", "valid", "test")) {
   
   out <- file.path("./data/processed", paste0(type_, "_set_imputed.RDS"))
   res <- df_all %>% filter(type == type_) %>% dplyr::select(-type)
@@ -69,13 +81,6 @@ for (type_ in c("train", "validation", "test")) {
   }
     saveRDS(res, out)  
 }
-
-# also save mice object (for diagnostics)
-if (!dir.exists("./data/processed/supp")) {
-  dir.create("./data/processed/supp", recursive = TRUE)
-}
-saveRDS(mice_imp_obj, "./data/processed/supp/mice_object.rds")
-
 
 # clear workspace so we can run scripts in succession
 rm(list = ls())
