@@ -4,6 +4,8 @@ author: "Jason Dude"
 format: 
   html:
     self-contained: true
+    fig-height: 8
+    fig-width: 10
 editor: visual
 editor_options: 
   chunk_output_type: console
@@ -20,11 +22,7 @@ library(tidymodels)
 library(tidyverse)
 
 # ggplot themeing
-theme_set(
-  theme(
-    text = element_text(size = 16)
-  )
-)
+theme_set(theme(text = element_text(size = 16)))
 
 # read imputed training set
 df_train <- readRDS("../../data/processed/train_set_imputed.RDS")
@@ -38,6 +36,7 @@ file_name <- "baseline-logreg-10foldcv"
 ```{r}
 # check if we've already created this model; if so read it in
 out <- file.path("../../models", paste0(file_name, ".RDS"))
+
 if (file.exists(out)) {
   wf_res <- readRDS(out)
   
@@ -47,8 +46,7 @@ if (file.exists(out)) {
     recipe(X1Yr_Death ~ ., data = .) %>% 
     update_role(Patient_ID, new_role = "ID") %>% 
     step_center(all_numeric_predictors()) %>% 
-    step_scale(all_numeric_predictors()) %>% 
-    step_downsample(X1Yr_Death)  
+    step_scale(all_numeric_predictors())
   
   # specify model and backend
   mod <- logistic_reg(
@@ -62,7 +60,7 @@ if (file.exists(out)) {
     add_model(mod)
   
   # use 10-fold CV to fit model to data
-  folds <- vfold_cv(df_train, v = 10, repeats = 5)
+  folds <- vfold_cv(df_train, v = 10)
   cntrl_opts <- control_resamples(save_pred = TRUE, save_workflow = TRUE)
   
   # fit model
@@ -70,15 +68,13 @@ if (file.exists(out)) {
   
   # save
   saveRDS(wf_res, file.path("../../models", paste0(file_name, ".RDS"))) 
+  saveRDS(wf, file.path("../../workflows", paste0(file_name, ".RDS"))) 
 }
 ```
 
 ## Results
 
 ```{r}
-#| fig-width: 10
-#| fig-height: 8
-
 # collect preds across folds
 wf_preds <- wf_res %>% collect_predictions()
 
@@ -92,12 +88,6 @@ print(
     mcc(wf_preds, X1Yr_Death, .pred_class)
   )
 )
-
-# confusion matrix
-wf_preds %>% 
-  conf_mat(truth = X1Yr_Death, estimate = .pred_class) %>% 
-  autoplot(cm, type = "heatmap") %>% 
-  print()
 
 # roc curve
 wf_preds %>% 

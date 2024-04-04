@@ -5,6 +5,8 @@ author: "Jason Dude"
 format: 
   html:
     self-contained: true
+    fig-height: 8
+    fig-width: 10
 editor: visual
 editor_options: 
   chunk_output_type: console
@@ -23,17 +25,10 @@ library(rmarkdown)
 tidymodels_prefer()
 
 # ggplot themeing
-theme_set(
-  theme(
-    text = element_text(size = 16)
-  )
-)
+theme_set(theme(text = element_text(size = 16)))
 
 # read imputed training set
 df_train <- readRDS("../../data/processed/train_set_imputed.RDS")
-
-# specify file name of model
-file_name <- "baseline-randomforest-10foldcv-tunegrid"
 ```
 
 ```{r}
@@ -62,8 +57,7 @@ mod_recipe <- df_train %>%
   recipe(X1Yr_Death ~ ., data = .) %>% 
   update_role(Patient_ID, new_role = "ID") %>% 
   step_center(all_numeric_predictors()) %>% 
-  step_scale(all_numeric_predictors()) %>% 
-  step_downsample(X1Yr_Death)  
+  step_scale(all_numeric_predictors())
 ```
 
 ```{r}
@@ -201,19 +195,7 @@ if (!use_tunegrid) {
 
 ```{r}
 # best fit metrics
-print(
-  rbind(
-    accuracy(wf_preds, X1Yr_Death, .pred_class),
-    f_meas(wf_preds, X1Yr_Death, .pred_class, event_level = "second"),
-    mcc(wf_preds, X1Yr_Death, .pred_class)
-  )
-)
-
-# confusion matrix
-wf_preds %>% 
-  conf_mat(truth = X1Yr_Death, estimate = .pred_class) %>% 
-  autoplot(cm, type = "heatmap") %>% 
-  print()
+paged_table(collect_metrics(wf_res))
 
 # roc curve
 wf_preds %>% 
@@ -251,6 +233,7 @@ mod_final <- wf_final %>%
 ```
 
 ```{r}
-mod_final$fit$importance
-mod_final$fit$importanceSD
+# variable importance
+randomForest::varImpPlot(mod_final$fit)
+randomForest::varUsed(mod_final$fit)
 ```
